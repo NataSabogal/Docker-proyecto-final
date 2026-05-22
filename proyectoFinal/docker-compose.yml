@@ -1,0 +1,93 @@
+version: '3.9'
+
+services: 
+  python-service:
+    build:
+      context: ./python-service
+    container_name: python-service
+    restart: on-failure
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    environment:
+      DB_HOST: 172.20.0.2
+      DB_PORT: 3306
+      DB_NAME: universidad
+      DB_USER: root
+      DB_PASSWORD: root123
+    networks:
+      proyecto_net:
+        ipv4_address: 172.20.0.4  
+  
+
+  node-service:
+    build:
+      context: ./node-service
+    container_name: node-service
+    restart: on-failure
+    ports:
+      - "3000:3000"
+    environment:
+      JAVA_SERVICE_URL: http://java-service:8080
+      PYTHON_SERVICE_URL: http://172.20.0.4:5000
+    depends_on:
+      - python-service
+      - java-service
+
+    networks:
+      proyecto_net:
+        ipv4_address: 172.20.0.5
+  
+  java-service:
+    build:
+      context: ./java-service
+    container_name: java-service
+    restart: on-failure
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: universidad
+      DB_USER: root
+      DB_PASSWORD: root123
+    networks:
+      proyecto_net:
+        ipv4_address: 172.20.0.3  
+
+  db:
+    image: mysql:latest
+    container_name: db
+    restart: always
+    ports:
+      - "3306:3306"
+    environment: 
+      - MYSQL_ROOT_PASSWORD=root123
+      - MYSQL_DATABASE=universidad
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      proyecto_net:
+        ipv4_address: 172.20.0.2
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql_data:
+
+networks:
+  proyecto_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+          gateway: 172.20.0.1      
